@@ -1,0 +1,67 @@
+-- Extensions
+CREATE EXTENSION IF NOT EXISTS citext;
+
+-- Tables
+CREATE TABLE IF NOT EXISTS vpcs(
+  id   INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  name CITEXT UNIQUE NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS allocations(
+  id                INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  vpc_id            INT NOT NULL REFERENCES vpcs(id) ON DELETE CASCADE,
+  primary_cidr      CIDR NOT NULL,
+  cgnat_cidr        CIDR NOT NULL,
+  requested_hosts   INT,
+  requested_prefix  INT,
+  labels            JSONB NOT NULL DEFAULT '{}'::jsonb,
+  request_id        UUID UNIQUE, -- idempotency key (NULL allowed, unique enforced when set)
+  created_at        TIMESTAMPTZ DEFAULT now(),
+
+  -- Keep each CIDR in its pool
+  CONSTRAINT in_primary CHECK (primary_cidr <<= '10.0.0.0/16'::cidr),
+  CONSTRAINT in_cgnat   CHECK (cgnat_cidr   <<= '100.64.0.0/10'::cidr),
+
+  -- CGNAT is 32x larger than primary (/X-5)
+  CONSTRAINT mask_rule  CHECK (masklen(cgnat_cidr) = masklen(primary_cidr) - 5),
+
+  -- Primary prefix bounds
+  CONSTRAINT primary_prefix_bounds CHECK (masklen(primary_cidr) BETWEEN 20 AND 26),
+
+  -- Request metadata sanity
+  CONSTRAINT hosts_range CHECK (requested_hosts IS NULL OR requested_hosts BETWEEN 1 AND 4000),
+  CONSTRAINT req_prefix_bounds CHECK (requested_prefix IS NULL OR requested_prefix BETWEEN 20 AND 26),
+
+  -- Labels schema: only environment and region allowed, with valid values
+  CONSTRAINT labels_valid CHECK (
+    (labels - 'environment' - 'region') = '{}'::jsonb
+    AND (labels ? 'environment' = FALSE OR labels->>'environment' IN ('dev','stage','prod'))
+    AND (labels ? 'region' = FALSE OR NULLIF(BTRIM(labels->>'region'), '') IS NOT NULL)
+  )
+);
+
+-- Prevent overlaps inside each pool
+ALTER TABLE allocations
+  ADD CONSTRAINT no_overlap_primary EXCLUDE USING gist (primary_cidr inet_ops WITH &&)
+  DEFERRABLE INITIALLY IMMEDIATE;
+
+ALTER TABLE allocations
+  ADD CONSTRAINT no_overlap_cgnat   EXCLUDE USING gist (cgnat_cidr   inet_ops WITH &&)
+  DEFERRABLE INITIALLY IMMEDIATE;
+
+-- Exact-duplicate uniqueness (optional but fast)
+CREATE UNIQUE INDEX IF NOT EXISTS ux_alloc_primary ON allocations (primary_cidr);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_alloc_cgnat   ON allocations (cgnat_cidr);
+
+-- Labels index for querying
+CREATE INDEX IF NOT EXISTS ix_alloc_labels ON allocations USING GIN (labels);
+
+-- Helpful lookups
+CREATE INDEX IF NOT EXISTS ix_alloc_vpc_created ON allocations (vpc_id, created_at DESC);
+
+-- Insert some demo data for testing
+INSERT INTO vpcs (name) VALUES 
+  ('production'),
+  ('development'),
+  ('staging')
+ON CONFLICT (name) DO NOTHING;

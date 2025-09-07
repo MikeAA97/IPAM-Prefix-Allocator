@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPAM Allocations Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <script src="/static/auth.js"></script>
+    <div class="container">
+        <div class="header">
+            <h1>🌐 IPAM Dashboard</h1>
+            <p>Automatic IP Address Management & Allocation</p>
+        </div>
+        
+        <div class="controls">
+            <button class="btn" onclick="loadAllocations()">
+                <span id="refresh-text">🔄 Refresh</span>
+                <span id="loading-spinner" class="loading-spinner" style="display: none;"></span>
+            </button>
+            <button class="btn btn-success" onclick="toggleAllocationForm()">➕ New Allocation</button>
+            <button class="btn btn-success" onclick="window.open('/docs', '_blank')">📖 API Docs</button>
+            <div class="status" id="status">Ready</div>
+        </div>
+        
+        <div class="content">
+            <div class="allocation-form" id="allocation-form">
+                <h3>🆕 Create New Allocation</h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="vpc-name">VPC Name *</label>
+                        <input type="text" id="vpc-name" placeholder="e.g., production, development" required>
+                        <small>Name of the VPC (will be created if it doesn't exist)</small>
+                    </div>
+                </div>
+                
+                <div class="allocation-mode">
+                    <div class="mode-option active" onclick="setAllocationMode('hosts')" id="hosts-mode">
+                        <h4>👥 By Host Count</h4>
+                        <p>Specify how many hosts you need</p>
+                    </div>
+                    <div class="mode-option" onclick="setAllocationMode('prefix')" id="prefix-mode">
+                        <h4>🔢 By Prefix Length</h4>
+                        <p>Specify exact subnet size (/20-/26)</p>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group" id="hosts-input">
+                        <label for="host-count">Number of Hosts *</label>
+                        <input type="number" id="host-count" min="1" max="4000" placeholder="e.g., 500">
+                        <small>System will calculate optimal subnet size (1-4000 hosts)</small>
+                    </div>
+                    <div class="form-group" id="prefix-input" style="display: none;">
+                        <label for="prefix-length">Prefix Length *</label>
+                        <select id="prefix-length">
+                            <option value="">Select prefix length</option>
+                            <option value="20">/20 (4096 total, 4091 usable)</option>
+                            <option value="21">/21 (2048 total, 2043 usable)</option>
+                            <option value="22">/22 (1024 total, 1019 usable)</option>
+                            <option value="23">/23 (512 total, 507 usable)</option>
+                            <option value="24">/24 (256 total, 251 usable)</option>
+                            <option value="25">/25 (128 total, 123 usable)</option>
+                            <option value="26">/26 (64 total, 59 usable)</option>
+                        </select>
+                        <small>Choose the exact subnet size you want</small>
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="toggleAllocationForm()">Cancel</button>
+                    <button type="button" class="btn btn-success" onclick="createAllocation()">
+                        <span id="create-text">✨ Create Allocation</span>
+                        <span id="create-spinner" class="loading-spinner" style="display: none;"></span>
+                    </button>
+                </div>
+            </div>
+            
+            <div id="summary-stats" style="display: none;"></div>
+            <div id="allocations-container">
+                <div class="empty-state">
+                    <h3>👋 Welcome to IPAM Dashboard</h3>
+                    <p>Click "New Allocation" to create your first IP allocation</p>
+                    <p><small>Now with automatic CIDR calculation!</small></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="/static/dashboard.js"></script>
+</body>
+</html>

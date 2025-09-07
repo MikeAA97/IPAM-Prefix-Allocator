@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ipam
+      POSTGRES_USER: ipam
+      POSTGRES_PASSWORD: ipam123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ipam -d ipam"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  ipam-api:
+    build: .
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ipam
+      POSTGRES_USER: ipam
+      POSTGRES_PASSWORD: ipam123
+      API_KEY: <API-Key> # Generate using `openssl rand -hex 8`
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./static:/app/static
+      - ./templates:/app/templates
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
