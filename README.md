@@ -94,14 +94,6 @@ curl "http://localhost:8000/allocations" \
   -H "X-API-Key: <API-Key>"
 ```
 
-### Create VPC (Soon to be deprecated)
-```bash
-curl -X POST "http://localhost:8000/vpcs" \
-  -H "X-API-Key: <API-Key>" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "production"}'
-```
-
 ## Subnet Sizing Logic
 
 The system automatically calculates optimal subnet sizes:
