@@ -16,7 +16,6 @@ from fastapi import FastAPI, HTTPException, Request, Header, Depends, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, validator
 
 # -------------------------------------------------------------------
@@ -51,37 +50,26 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS middleware for local development
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:8000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Static/template (ensure dirs exist in the container)
+# Static/template
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 # -------------------------------------------------------------------
-# Server-generated Request ID (clients cannot set it)
-# -------------------------------------------------------------------
-REQ_HDR = "X-Request-Id"
+REQ_ID = "X-Request-Id"
 
 @app.middleware("http")
 async def force_request_id(request: Request, call_next):
-    rid = uuid.uuid4().hex  # always new, ignore any client header
-    request.state.request_id = rid
+    request_id = uuid.uuid4().hex  # always new, ignore any client header
+    request.state.request_id = request_id
     
     # Log incoming requests
-    logger.info(f"Request {rid}: {request.method} {request.url.path}")
+    logger.info(f"Request {request_id}: {request.method} {request.url.path}")
     
     response = await call_next(request)
-    response.headers[REQ_HDR] = rid
+    response.headers[REQ_ID] = request_id
     
     # Log response status
-    logger.info(f"Request {rid}: Response {response.status_code}")
+    logger.info(f"Request {request_id}: Response {response.status_code}")
     
     return response
 
@@ -98,10 +86,9 @@ def verify_api_key(x_api_key: str = Header(..., alias="X-API-Key")):
     return True
 
 # -------------------------------------------------------------------
-# Models (unchanged from your original)
+# Models
 # -------------------------------------------------------------------
-class VPC(BaseModel):
-    name: str
+
 
 class Labels(BaseModel):
     environment: Optional[str] = Field(None, description="dev|stage|prod")
@@ -205,7 +192,7 @@ def _startup():
         logger.error(f"Startup failed: {e}")
 
 # -------------------------------------------------------------------
-# Sizing (unchanged)
+# Sizing (CGNAT Range is always /5 larger than primary for 1:32 Node to Pod Relationship)
 # -------------------------------------------------------------------
 def hosts_to_prefix_length(hosts: int) -> int:
     needed_addresses = hosts + 5  # policy reserve
@@ -216,10 +203,10 @@ def hosts_to_prefix_length(hosts: int) -> int:
     return result
 
 def usable_count(prefix_len: int) -> int:
-    return (2 ** (32 - prefix_len)) - 5  # matches policy
+    return (2 ** (32 - prefix_len)) - 5
 
 # -------------------------------------------------------------------
-# Overlap checks with improved logging
+# Overlap checks
 # -------------------------------------------------------------------
 CHECK_OVERLAP_SQL = """
 SELECT {column}::text AS cidr
@@ -298,7 +285,7 @@ def find_next_available_subnets_tx(cur, prefix_length: int) -> Tuple[str, str, i
     return primary_cidr, cgnat_cidr, cgnat_prefix, diag
 
 # -------------------------------------------------------------------
-# Routes (key ones with logging improvements)
+# Routes
 # -------------------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):
@@ -320,8 +307,6 @@ def readyz():
         logger.error(f"Readiness check failed: {e}")
         raise HTTPException(status_code=500, detail={"code": "SERVICE_UNAVAILABLE", "message": "Database not ready", "details": str(e)})
 
-# ... (rest of your routes remain the same, just add this logging improvement to the allocate endpoint)
-
 @app.post("/allocate", dependencies=[Depends(verify_api_key)])
 def allocate(req: Request, payload: AllocationRequest, dry_run: bool = Query(False)):
     request_id = req.state.request_id
@@ -340,7 +325,7 @@ def allocate(req: Request, payload: AllocationRequest, dry_run: bool = Query(Fal
         prefix_length = hosts_to_prefix_length(payload.hosts)
         logger.info(f"Request {request_id}: Calculated prefix length /{prefix_length} for {payload.hosts} hosts")
     else:
-        prefix_length = int(payload.prefix_length)  # 20..26 by model
+        prefix_length = int(payload.prefix_length)
         logger.info(f"Request {request_id}: Using specified prefix length /{prefix_length}")
 
     # transactional allocation with retries
@@ -373,8 +358,7 @@ def allocate(req: Request, payload: AllocationRequest, dry_run: bool = Query(Fal
                             "labels": labels_json,
                         }
 
-                    # insert allocation with server-minted request_id
-                    server_request_id = req.state.request_id  # from middleware
+                    server_request_id = req.state.request_id
                     cur.execute(
                         """
                         INSERT INTO allocations
@@ -434,7 +418,6 @@ def allocate(req: Request, payload: AllocationRequest, dry_run: bool = Query(Fal
 
     raise HTTPException(500, {"code": "INTERNAL_ERROR", "message": "Unexpected retry failure", "details": None})
 
-# Keep all your other existing routes unchanged
 @app.get("/allocations", dependencies=[Depends(verify_api_key)])
 def list_allocations(
     limit: int = Query(50, ge=1, le=100),
@@ -497,12 +480,6 @@ def list_allocations(
                 r["created_at"] = r["created_at"].isoformat()
         return {"total_count": total, "limit": limit, "offset": offset, "items": rows}
 
-@app.post("/vpcs", dependencies=[Depends(verify_api_key)])
-def create_vpc(v: VPC):
-    with db() as conn, conn.cursor() as cur:
-        cur.execute("INSERT INTO vpcs(name) VALUES(%s) ON CONFLICT DO NOTHING", (v.name,))
-        logger.info(f"Created/ensured VPC: {v.name}")
-    return {"ok": True}
 
 @app.put("/allocations/{allocation_id}", dependencies=[Depends(verify_api_key)])
 def update_allocation_vpc(allocation_id: int, payload: ReassignRequest):
