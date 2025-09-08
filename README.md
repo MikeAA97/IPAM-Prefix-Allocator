@@ -18,13 +18,13 @@ A FastAPI-based automatic IP address allocation system. Designed with a K8s Node
 ## Architecture
 
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Web Dashboard │────│   FastAPI App    │────│   PostgreSQL    │
-│   (HTML/JS/CSS) │    │                  │    └─────────────────┘
-│                 │    │  - Auto CIDR     │
-└─────────────────┘    │  - Validation    │
-                       │  - Overlap check │
-                       └──────────────────┘
+┌─────────────────--┐    ┌──────────────────┐    ┌────────────────┐
+│   Web Dashboard   │────│   FastAPI App    │────│   PostgreSQL   │
+│   (HTML/JS/CSS)   │    │                  │    └────────────────┘
+└─────────────────--┘    │  - Auto CIDR     │
+                         │  - Validation    │
+                         │  - Overlap check │
+                         └──────────────────┘
 ```
 
 The system allocates paired CIDRs:
@@ -34,21 +34,19 @@ The system allocates paired CIDRs:
 ## Quick Start
 
 ### Local Development
-0. **Generate an API-Key**
-```bash
-openssl rand -hex 8
-```
-A Side note that I only got this to work on Python3.12, not 3.13 due to psycopg2 issues.
 
 1. **Clone and setup**:
 ```bash
 git clone <repository-url>
-cd ipam
+cd IPAM-Prefix-Allocator
+python3.12 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
+openssl rand -hex 8 # Generates an API-Token for API Usage
 ```
-
 1. **Start services with Docker Compose**:
 ```bash
+# Ensure the API-Key generated in Step 1 is placed in the ipam-api service
 docker-compose up -d
 ```
 
@@ -72,26 +70,18 @@ kind load docker-image ipam-api:latest
 3. **Deploy**:
 ```bash
 kubectl apply -f k8s/1-namespace.yaml
-kubectl apply -f k8s/2-secret.yaml
+kubectl apply -f k8s/2-secret.yaml  # Ensure you're using the generated API-Key here.
 kubectl apply -f k8s/3-postgres.yaml
 <wait about 10 seconds> (I should put this in a script one-day)
 kubectl apply -f k8s/4-api.yaml
+kubectl port-forward -n ipam svc/ipam-api 8080:80
 ```
 
 4. **Access**:
-- Dashboard: http://localhost:30080
-- Use API key: `<API-Key>`
-  - This was the first key I generated, best practice would be. to...
+- Dashboard: http://localhost:8080
+- Input generated API-Key
 
 ## API Usage
-
-### Create VPC
-```bash
-curl -X POST "http://localhost:8000/vpcs" \
-  -H "X-API-Key: <API-Key>" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "production"}'
-```
 
 ### Allocate by Host Count
 ```bash
@@ -120,6 +110,14 @@ curl -X POST "http://localhost:8000/allocate" \
 ```bash
 curl "http://localhost:8000/allocations" \
   -H "X-API-Key: <API-Key>"
+```
+
+### Create VPC (Soon to be deprecated)
+```bash
+curl -X POST "http://localhost:8000/vpcs" \
+  -H "X-API-Key: <API-Key>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "production"}'
 ```
 
 ## Subnet Sizing Logic
