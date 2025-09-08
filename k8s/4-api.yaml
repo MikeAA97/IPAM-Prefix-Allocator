@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: api
-        image: ipam-api:dev-001  # Use your local image name
+        image: ipam-api:latest
         imagePullPolicy: Never  # This prevents Kubernetes from trying to pull from a registry
         envFrom:
         - secretRef:
