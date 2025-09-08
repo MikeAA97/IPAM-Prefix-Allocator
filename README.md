@@ -50,34 +50,16 @@ openssl rand -hex 8 # Generates an API-Token for API Usage
 docker-compose up -d
 ```
 
-1. **Access the application**:
+2. **Access the application**:
 - Dashboard: http://localhost:8000
 - API Documentation: http://localhost:8000/docs
 
 ### Kubernetes Deployment
 
 1. **Create local cluster**:
-```bash
-kind create cluster --config k8s/0-kind.yaml
-```
+`./k8s-setup.sh`
 
-2. **Build and load image**:
-```bash
-docker build -t ipam-api:latest .
-kind load docker-image ipam-api:latest
-```
-
-3. **Deploy**:
-```bash
-kubectl apply -f k8s/1-namespace.yaml
-kubectl apply -f k8s/2-secret.yaml  # Ensure you're using the generated API-Key here.
-kubectl apply -f k8s/3-postgres.yaml
-<wait about 10 seconds> (I should put this in a script one-day)
-kubectl apply -f k8s/4-api.yaml
-kubectl port-forward -n ipam svc/ipam-api 8080:80
-```
-
-4. **Access**:
+2. **Access**:
 - Dashboard: http://localhost:8080
 - Input generated API-Key
 
