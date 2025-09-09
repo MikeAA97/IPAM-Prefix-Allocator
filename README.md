@@ -146,15 +146,18 @@ API_KEY=<API-Key>
 ### Running Tests
 ```bash
 # Install test dependencies
-pip install pytest pytest-asyncio httpx
+python3.12 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+pip install pytest
 
 # Run tests
-pytest
+python3.12 -m pytest  
 ```
 
 ## Future nice-to-haves
 
-- A more Netbox like visualation.
+- A more Netbox like visualization.
 - VRFs for CGNAT Range.
 - Multi-Stage Docker Builds to make final artifacts a bit smaller.
 - Resource constraints for K8s deployments to align with best practices.
