@@ -5,7 +5,7 @@ import time
 import json
 import uuid
 import logging
-from typing import Optional, Tuple, List, Dict
+from typing import Optional, Tuple, List, Dict, Literal
 
 import psycopg2
 import psycopg2.extras
@@ -59,7 +59,7 @@ REQ_ID = "X-Request-Id"
 
 @app.middleware("http")
 async def force_request_id(request: Request, call_next):
-    request_id = uuid.uuid4().hex  # always new, ignore any client header
+    request_id = uuid.uuid4().hex
     request.state.request_id = request_id
     
     # Log incoming requests
@@ -89,27 +89,9 @@ def verify_api_key(x_api_key: str = Header(..., alias="X-API-Key")):
 # Models
 # -------------------------------------------------------------------
 
-
 class Labels(BaseModel):
-    environment: Optional[str] = Field(None, description="dev|stage|prod")
-    region: Optional[str] = Field(None, description="e.g., us-east")
-
-    @validator("environment")
-    def env_ok(cls, v):
-        if v is None:
-            return v
-        if v not in {"dev", "stage", "prod"}:
-            raise ValueError("environment must be one of dev, stage, prod")
-        return v
-
-    @validator("region")
-    def region_ok(cls, v):
-        if v is None:
-            return v
-        v2 = v.strip()
-        if not v2:
-            raise ValueError("region cannot be empty")
-        return v2
+    environment: Optional[Literal["dev", "stage", "prod"]] = None
+    region: Optional[str] = None
 
     def to_jsonb(self) -> Dict[str, str]:
         out = {}
@@ -121,8 +103,8 @@ class Labels(BaseModel):
 
 class AllocationRequest(BaseModel):
     vpc: str
-    hosts: Optional[int] = Field(None, description="1..4000")
-    prefix_length: Optional[int] = Field(None, ge=20, le=26, description="/20.. /26")
+    hosts: Optional[int] = Field(None, description="1 - 4000")
+    prefix_length: Optional[int] = Field(None, ge=20, le=26, description="/20 - /26")
     labels: Optional[Labels] = None
 
     class Config:
