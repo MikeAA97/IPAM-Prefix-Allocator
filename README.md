@@ -37,7 +37,7 @@ The system allocates paired CIDRs:
 
 1. **Clone and setup**:
 ```bash
-git clone <repository-url>
+git clone https://github.com/MikeAA97/IPAM-Prefix-Allocator
 cd IPAM-Prefix-Allocator
 python3.12 -m venv venv
 source venv/bin/activate
